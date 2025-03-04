@@ -1,19 +1,9 @@
-Imports System
 Imports SolidWorks.Interop.sldworks
 Imports SolidWorks.Interop.swconst
 Imports SolidWorks.Interop.cosworks
-Imports System.Diagnostics
-Imports System.Windows.Forms
-Imports System.Runtime.InteropServices.JavaScript.JSType
-Imports System.Net.NetworkInformation
-Imports System.Runtime.CompilerServices.RuntimeHelpers
-Imports System.Security.Cryptography
-Imports System.Xml
 Imports Microsoft.Office.Interop
-Imports System.ComponentModel.DataAnnotations.Schema
 Imports System.Data
 Imports System.Timers
-Imports System.Formats
 
 Module Program
 
@@ -24,9 +14,6 @@ Module Program
         Dim timer As Timer = New Timer(180000)
         AddHandler timer.Elapsed, New ElapsedEventHandler(AddressOf TimerElapsed)
         timer.Start()
-        'xlApp.Workbooks.Close()
-        'xlApp.Quit()
-        'Runtime.InteropServices.Marshal.ReleaseComObject(xlApp)
 
         ' dimension errors and SW managers
         Dim model As ModelDoc2
@@ -41,12 +28,7 @@ Module Program
         Const sAddinName As String = "C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\Simulation\cosworks.dll"
         Dim status As Integer = app.LoadAddIn(sAddinName)
 
-        ' make new part, close and reopen in silent
-        'model = app.NewPart()
-        'Dim savestatus As Boolean = model.SaveAs3("C:\SolidWorks Temp Sims\current.SLDPRT", 0, 1)
-        'app.CloseAllDocuments(True) 'Closing all documents without save
-        'model = app.OpenDoc6("C:\SolidWorks Temp Sims\current.SLDPRT", 1, 1, "", errCode, warnCode)
-
+        'make new part, close and reopen in silent
         model = app.NewPart()
         Dim savestatus As Boolean = model.SaveAs3("C:\Users\HuRo Lab.BMEG-DHBX74Z2\Desktop\SolidWorks Temp Sims\current.SLDPRT", 0, 1)
         app.CloseAllDocuments(True) 'Closing all documents without save
@@ -55,7 +37,7 @@ Module Program
         sketchMgr = model.SketchManager
         featureMgr = model.FeatureManager
 
-        'enale cosmos in active doc
+        'enable cosmos in active doc
         Dim ActDoc As CWModelDoc = SetupCosmos(app)
 
         'import points from excel 
@@ -79,7 +61,6 @@ Module Program
         CreateEnds(model, TOPpoints, BOTpoints, nPointsTOP, nPointsBOT)
         model.Insert3DSketch2(True)
 
-        ' Dim extrude As Double = 0.01
         ' extrude sketch and add axis of rotation
         ExtrudeSketch(model, featureMgr, TOPpoints, extrude)
         CreateAxisofRotation(model)
@@ -158,7 +139,6 @@ Module Program
 
 
         Const MeshEleSize As Double = 15 'mm
-        'Const MeshTol As Double = 0.73031234 'mm
 
         errCode = Study.CreateMesh(0, MeshEleSize, Nothing)
         If errCode <> 0 Then ErrorMsg(app, "Failed to create mesh", True)
@@ -260,12 +240,6 @@ Module Program
         xlWorkSheetVM_MinMax.Name = "VM_MinMax"
         Dim rangeVM_MinMax As Excel.Range = xlWorkSheetVM_MinMax.Range(xlWorkSheetVM_MinMax.Cells(1, 1), xlWorkSheetVM_MinMax.Cells(4, nStep))
         rangeVM_MinMax.Value2 = VM_MinMax_string
-
-        'Dim VM_MinMax As Object
-        'VM_MinMax = Results.GetMinMaxStress(9, 0, nStep, Nothing, 0, errCode)
-        'Dim VM_MinMax_string As String(,) = var_string(VM_MinMax)
-        'Dim xlWorkSheetVM_MinMax As Excel.Worksheet = xlWorkBook.Sheets.Add(Count:=1)
-        'write2excel(VM_MinMax, xlWorkSheetVM_MinMax, VM_MinMax_string, "VMStress")
 
         xlWorkBook.SaveAs("Z:\StudentFolders\Haider\Projects\Optimization\SolidWorks Interfacing Optimizer\tempfolder\Results.xlsx")
         xlApp.Workbooks.Close()
