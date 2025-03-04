@@ -11,9 +11,6 @@ Module Program
         ' define shape def excel, set up excel and timer
         Dim strFileName As String = "Z:\StudentFolders\Haider\Projects\Optimization\SolidWorks Interfacing Optimizer\tempfolder\Shape Definition.xlsx"
         Dim xlApp As Excel.Application = New Excel.Application
-        Dim timer As Timer = New Timer(180000)
-        AddHandler timer.Elapsed, New ElapsedEventHandler(AddressOf TimerElapsed)
-        timer.Start()
 
         ' dimension errors and SW managers
         Dim model As ModelDoc2
@@ -386,11 +383,6 @@ Module Program
         Dim SelObj As Object = model.Extension.GetObjectByPersistReference3((PID), errCode)
         IdentifyEntity = SelObj 'Face Fixed
     End Function
-    Sub TimerElapsed(ByVal sender As Object, ByVal e As ElapsedEventArgs)
-        app.CloseAllDocuments(True) 'Closing all documents without save
-        app.ExitApp()
-        End
-    End Sub
     Public app As SldWorks
 End Module
 
