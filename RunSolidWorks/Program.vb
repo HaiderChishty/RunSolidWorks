@@ -69,9 +69,8 @@ Module Program
         CreateAxisofRotation(model)
 
         'add reference point of free end of flexure
-        Dim skPoint As SketchPoint
         model.Insert3DSketch2(False)
-        skPoint = sketchMgr.CreatePoint(Edge(0, 0), Edge(0, 1), extrude / 2) ' 
+        Dim skPoint As SketchPoint = sketchMgr.CreatePoint(Edge(0, 0), Edge(0, 1), extrude / 2) ' 
         model.InsertSketch2(True)
 
         'create simulation study
@@ -84,25 +83,24 @@ Module Program
         Dim inplane2_entity(0) As Object
 
         base_entity(0) = IdentifyEntity(model, "FACE", Base(0, 0), Base(0, 1), extrude / 2, errCode)
+        rot_entity(0) = IdentifyEntity(model, "FACE", Edge(0, 0), Edge(0, 1), extrude / 2, errCode)
+        inplane1_entity(0) = IdentifyEntity(model, "FACE", (TOPpoints(1, 0) + BOTpoints(1, 0)) / 2, (TOPpoints(1, 1) + BOTpoints(1, 1)) / 2, 0, errCode)
+        inplane2_entity(0) = IdentifyEntity(model, "FACE", (TOPpoints(1, 0) + BOTpoints(1, 0)) / 2, (TOPpoints(1, 1) + BOTpoints(1, 1)) / 2, extrude, errCode)
+
         Dim TOPEdge As Object = IdentifyEntity(model, "EDGE", TOPpoints(2, 0), TOPpoints(2, 1), extrude, errCode)
         Dim BOTEdge As Object = IdentifyEntity(model, "EDGE", BOTpoints(2, 0), BOTpoints(2, 1), extrude, errCode)
         Dim Axis As Object = IdentifyEntity(model, "AXIS", 0, 0, 0, errCode)
         Dim boolstatus As Boolean = model.Extension.SelectByID2("", "FACE", Edge(0, 0), Edge(0, 1), extrude / 2, False, 0, Nothing, 0)
-        rot_entity(0) = IdentifyEntity(model, "FACE", Edge(0, 0), Edge(0, 1), extrude / 2, errCode)
-        inplane1_entity(0) = IdentifyEntity(model, "FACE", (TOPpoints(1, 0) + BOTpoints(1, 0)) / 2, (TOPpoints(1, 1) + BOTpoints(1, 1)) / 2, 0, errCode)
-        inplane2_entity(0) = IdentifyEntity(model, "FACE", (TOPpoints(1, 0) + BOTpoints(1, 0)) / 2, (TOPpoints(1, 1) + BOTpoints(1, 1)) / 2, extrude, errCode)
 
         'set up bc manager
         Dim LBCMgr As CWLoadsAndRestraintsManager = Study.LoadsAndRestraintsManager
         If LBCMgr Is Nothing Then ErrorMsg(app, "Failed to get loads and restraints manager", True)
 
         'Add restraint: fix base
-        Dim CWFeatObj3 As CWRestraint
-        CWFeatObj3 = LBCMgr.AddRestraint(0, (base_entity), Axis, errCode)
+        Dim CWFeatObj3 As CWRestraint = LBCMgr.AddRestraint(0, (base_entity), Axis, errCode)
         'If errCode <> 0 Then ErrorMsg(app, "Failed to create restraint", True)
 
         'rotate free end of flexure 180 degs about axis of rot.
-        Dim CWFeatObj4 As CWRestraint
         Dim displacement(5) As Object
         displacement(0) = 0.0#
         displacement(1) = 180
@@ -110,11 +108,10 @@ Module Program
         displacement(3) = 1
         displacement(4) = 1
         displacement(5) = 0
-        CWFeatObj4 = LBCMgr.AddPrescribedDisplacement(displacement, 3, (rot_entity), Axis, errCode)
+        Dim CWFeatObj4 As CWRestraint = LBCMgr.AddPrescribedDisplacement(displacement, 3, (rot_entity), Axis, errCode)
         'If errCode <> 0 Then ErrorMsg(app, "Failed to create restraint", True)
 
         'constrain flexure to enforce a planar deformation
-        Dim CWFeatObj5 As CWRestraint
         Dim displacement_inplane1(5) As Object
         displacement_inplane1(0) = 0.0#
         displacement_inplane1(1) = 0.0#
@@ -122,9 +119,8 @@ Module Program
         displacement_inplane1(3) = 0
         displacement_inplane1(4) = 0
         displacement_inplane1(5) = 1
-        CWFeatObj5 = LBCMgr.AddPrescribedDisplacement(displacement_inplane1, 3, (inplane1_entity), Axis, errCode)
+        Dim CWFeatObj5 As CWRestraint = LBCMgr.AddPrescribedDisplacement(displacement_inplane1, 3, (inplane1_entity), Axis, errCode)
 
-        Dim CWFeatObj6 As CWRestraint
         Dim displacement_inplane2(5) As Object
         displacement_inplane2(0) = 0.0#
         displacement_inplane2(1) = 0.0#
@@ -132,11 +128,10 @@ Module Program
         displacement_inplane2(3) = 0
         displacement_inplane2(4) = 0
         displacement_inplane2(5) = 1
-        CWFeatObj6 = LBCMgr.AddPrescribedDisplacement(displacement_inplane2, 3, (inplane2_entity), Axis, errCode)
+        Dim CWFeatObj6 As CWRestraint = LBCMgr.AddPrescribedDisplacement(displacement_inplane2, 3, (inplane2_entity), Axis, errCode)
 
         'Create mesh
-        Dim Mesh As CWMesh
-        Mesh = Study.Mesh
+        Dim Mesh As CWMesh = Study.Mesh
         If Mesh Is Nothing Then ErrorMsg(app, "Failed to create mesh object", True)
         Mesh.MesherType = 0
         Mesh.Quality = 1
@@ -155,18 +150,15 @@ Module Program
         'Run analysis
         errCode = Study.RunAnalysis
         'If errCode <> 0 Then ErrorMsg(app, "Analysis failed with error code as defined in swsRunAnalysisError_e: " & errCode, True)
-        Dim Results As CWResults
-        Dim nStep As Integer
-        Results = Study.Results
-        nStep = Results.GetMaximumAvailableSteps
+        Dim Results As CWResults = Study.Results
+        Dim nStep As Integer = Results.GetMaximumAvailableSteps
 
         'Dimension simulation reactions
         Dim selectedAndModelReactionFM As Object = Nothing
         Dim selectedOnlyReactionFM As Object = Nothing
 
         'Dimension simulation steps and export to excel
-        Dim times As Object
-        times = Results.GetTimeOrFrequencyAtEachStep(0, errCode)
+        Dim times As Object = Results.GetTimeOrFrequencyAtEachStep(0, errCode)
         Dim timesString As String(,) = var_string(times)
 
         Dim xlWorkBook As Excel.Workbook = xlApp.Workbooks.Add()
