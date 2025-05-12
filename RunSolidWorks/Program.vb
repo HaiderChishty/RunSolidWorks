@@ -3,16 +3,18 @@ Imports SolidWorks.Interop.swconst
 Imports SolidWorks.Interop.cosworks
 Imports Microsoft.Office.Interop
 Imports System.Data
-Imports System.Timers
 
 Module Program
 
     Sub Main()
-        ' define shape def excel, set up excel and timer
-        Dim strFileName As String = "Z:\StudentFolders\Haider\Projects\Optimization\SolidWorks Interfacing Optimizer\tempfolder\Shape Definition.xlsx"
+        'define tempfolder location, and filename for the excel that stores flexure geometric properties
+        Dim tempfolder_loc As String = "Z:\StudentFolders\Haider\Projects\Optimization\SolidWorks Interfacing Optimizer\tempfolder\"
+        Dim strFileName As String = tempfolder_loc & "Shape Definition.xlsx"
+
+        'set up new excel app
         Dim xlApp As Excel.Application = New Excel.Application
 
-        ' dimension errors and SW managers
+        'dimension errors and SW managers
         Dim model As ModelDoc2
         Dim sketchMgr As SketchManager
         Dim featureMgr As FeatureManager
@@ -20,24 +22,28 @@ Module Program
         Dim warnCode As Integer
         Dim errorCode As Integer
 
-        ' launch SW and load cosmos
+        'launch SW and load cosmos
         app = LaunchSW()
-        Const sAddinName As String = "C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\Simulation\cosworks.dll"
+        Const sAddinName As String = "C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\Simulation\cosworks.dll" 'system specific
         Dim status As Integer = app.LoadAddIn(sAddinName)
 
         'make new part, close and reopen in silent
         model = app.NewPart()
-        Dim savestatus As Boolean = model.SaveAs3("C:\Users\HuRo Lab.BMEG-DHBX74Z2\Desktop\SolidWorks Temp Sims\current.SLDPRT", 0, 1)
+        Dim current_loc As String = tempfolder_loc & "current.SLDPRT"
+        Dim savestatus As Boolean = model.SaveAs3(current_loc, 0, 1) 'save part
         app.CloseAllDocuments(True) 'Closing all documents without save
-        model = app.OpenDoc6("C:\Users\HuRo Lab.BMEG-DHBX74Z2\Desktop\SolidWorks Temp Sims\current.SLDPRT", 1, 1, "", errCode, warnCode)
+        model = app.OpenDoc6(current_loc, 1, 1, "", errCode, warnCode)
 
+        'define managers
         sketchMgr = model.SketchManager
         featureMgr = model.FeatureManager
 
         'enable cosmos in active doc
         Dim ActDoc As CWModelDoc = SetupCosmos(app)
 
-        'import points from excel 
+        'import points from excel (excel contains sheet defining TOP surface of flexure,
+        'BOTtom surface of flexure, and the Ends of the flexure. also constains extra Parameters such
+        'as extrusion parameters)
         Dim TOPpoints As Double(,) = PointsFromXL(xlApp, strFileName, "TOP")
         Dim BOTpoints As Double(,) = PointsFromXL(xlApp, strFileName, "BOT")
         Dim Ends As Double(,) = PointsFromXL(xlApp, strFileName, "Ends")
@@ -51,26 +57,27 @@ Module Program
         Edge(0, 2) = Ends(1, 2)
         Dim extrude As Double = ParameterFromXL(xlApp, strFileName, "Parameters", "A1")
 
-        ' sketch contour
+        'sketch contour of flexure
         model.Insert3DSketch2(False)
         Dim nPointsTOP As Integer = CreateSurface(featureMgr, model, TOPpoints)
         Dim nPointsBOT As Integer = CreateSurface(featureMgr, model, BOTpoints)
         CreateEnds(model, TOPpoints, BOTpoints, nPointsTOP, nPointsBOT)
         model.Insert3DSketch2(True)
 
-        ' extrude sketch and add axis of rotation
+        'extrude sketch and add axis of rotation
         ExtrudeSketch(model, featureMgr, TOPpoints, extrude)
         CreateAxisofRotation(model)
 
+        'add reference point of free end of flexure
         Dim skPoint As SketchPoint
         model.Insert3DSketch2(False)
         skPoint = sketchMgr.CreatePoint(Edge(0, 0), Edge(0, 1), extrude / 2) ' 
         model.InsertSketch2(True)
 
-        ' create study
+        'create simulation study
         Dim Study As CWStudy = CreateNonLinearStudy(ActDoc, errCode, errorCode)
 
-        ' identify entities of interest
+        'identify entities of interest
         Dim base_entity(0) As Object
         Dim rot_entity(0) As Object
         Dim inplane1_entity(0) As Object
@@ -85,17 +92,18 @@ Module Program
         inplane1_entity(0) = IdentifyEntity(model, "FACE", (TOPpoints(1, 0) + BOTpoints(1, 0)) / 2, (TOPpoints(1, 1) + BOTpoints(1, 1)) / 2, 0, errCode)
         inplane2_entity(0) = IdentifyEntity(model, "FACE", (TOPpoints(1, 0) + BOTpoints(1, 0)) / 2, (TOPpoints(1, 1) + BOTpoints(1, 1)) / 2, extrude, errCode)
 
+        'set up bc manager
         Dim LBCMgr As CWLoadsAndRestraintsManager = Study.LoadsAndRestraintsManager
         If LBCMgr Is Nothing Then ErrorMsg(app, "Failed to get loads and restraints manager", True)
 
-        'Add a restraint
+        'Add restraint: fix base
         Dim CWFeatObj3 As CWRestraint
         CWFeatObj3 = LBCMgr.AddRestraint(0, (base_entity), Axis, errCode)
         'If errCode <> 0 Then ErrorMsg(app, "Failed to create restraint", True)
 
+        'rotate free end of flexure 180 degs about axis of rot.
         Dim CWFeatObj4 As CWRestraint
         Dim displacement(5) As Object
-
         displacement(0) = 0.0#
         displacement(1) = 180
         displacement(2) = 0.0#
@@ -105,9 +113,9 @@ Module Program
         CWFeatObj4 = LBCMgr.AddPrescribedDisplacement(displacement, 3, (rot_entity), Axis, errCode)
         'If errCode <> 0 Then ErrorMsg(app, "Failed to create restraint", True)
 
+        'constrain flexure to enforce a planar deformation
         Dim CWFeatObj5 As CWRestraint
         Dim displacement_inplane1(5) As Object
-
         displacement_inplane1(0) = 0.0#
         displacement_inplane1(1) = 0.0#
         displacement_inplane1(2) = 0.0#
@@ -118,7 +126,6 @@ Module Program
 
         Dim CWFeatObj6 As CWRestraint
         Dim displacement_inplane2(5) As Object
-
         displacement_inplane2(0) = 0.0#
         displacement_inplane2(1) = 0.0#
         displacement_inplane2(2) = 0.0#
@@ -134,53 +141,39 @@ Module Program
         Mesh.MesherType = 0
         Mesh.Quality = 1
 
-
         Const MeshEleSize As Double = 15 'mm
-
         errCode = Study.CreateMesh(0, MeshEleSize, Nothing)
         If errCode <> 0 Then ErrorMsg(app, "Failed to create mesh", True)
 
-        Dim num As Integer
-        Dim idList As Object
-        Dim normalNum As Object = Nothing
-        Dim normalVec As Object = Nothing
+        'Dimension and define node arrays 
         Dim ncount As Integer
-        Dim node_base As Object = Nothing
-        Dim node_TOP As Object = Nothing
-        Dim node_BOT As Object = Nothing
-        Dim nodes As Object
-
-        num = Mesh.GetSurfaceNodesAndNormals(idList, normalNum, normalVec)
-        node_base = Mesh.GetNodeDataFromEntity(base_entity(0), ncount)
-        node_TOP = Mesh.GetNodeDataFromEntity(TOPEdge, ncount)
-        node_BOT = Mesh.GetNodeDataFromEntity(BOTEdge, ncount)
-        nodes = Mesh.GetNodes()
+        Dim node_base As Object = Mesh.GetNodeDataFromEntity(base_entity(0), ncount)
+        Dim node_TOP As Object = Mesh.GetNodeDataFromEntity(TOPEdge, ncount)
+        Dim node_BOT As Object = Mesh.GetNodeDataFromEntity(BOTEdge, ncount)
+        Dim nodes As Object = Mesh.GetNodes()
 
         'Run analysis
-        Debug.Print("Running the analysis")
-        Debug.Print("")
         errCode = Study.RunAnalysis
         'If errCode <> 0 Then ErrorMsg(app, "Analysis failed with error code as defined in swsRunAnalysisError_e: " & errCode, True)
-
         Dim Results As CWResults
         Dim nStep As Integer
         Results = Study.Results
-        'If CWFeatObj6 Is Nothing Then ErrorMsg(app, "Failed to get results object", True)
-        Debug.Print("Study results...")
         nStep = Results.GetMaximumAvailableSteps
 
+        'Dimension simulation reactions
         Dim selectedAndModelReactionFM As Object = Nothing
         Dim selectedOnlyReactionFM As Object = Nothing
 
+        'Dimension simulation steps and export to excel
         Dim times As Object
         times = Results.GetTimeOrFrequencyAtEachStep(0, errCode)
         Dim timesString As String(,) = var_string(times)
 
-        'xlApp.Visible = True
         Dim xlWorkBook As Excel.Workbook = xlApp.Workbooks.Add()
         Dim xlWorkSheetTime As Excel.Worksheet = xlWorkBook.ActiveSheet
         write2excel(times, xlWorkSheetTime, timesString, "Time")
 
+        'Export nodes to Excel
         Dim node_base_string As String(,) = var_string(node_base)
         Dim xlWorkSheetNodeBase As Excel.Worksheet = xlWorkBook.Sheets.Add(Count:=1)
         write2excel(node_base, xlWorkSheetNodeBase, node_base_string, "Node Base")
@@ -197,6 +190,7 @@ Module Program
         Dim xlWorkSheetNodes As Excel.Worksheet = xlWorkBook.Sheets.Add(Count:=1)
         write2excel(nodes, xlWorkSheetNodes, nodes_string, "Nodes")
 
+        'Export nodal forces (at each step) to Excel
         Dim forces2(nStep - 1) As Object
         Dim forcesstring(nodes.length / 4 * 9 - 1, nStep - 1) As String
         Dim xlWorkSheetForce As Excel.Worksheet = xlWorkBook.Sheets.Add(Count:=1)
@@ -212,6 +206,7 @@ Module Program
         Dim rangeforce As Excel.Range = xlWorkSheetForce.Range(xlWorkSheetForce.Cells(1, 1), xlWorkSheetForce.Cells(nodes.length / 4 * 9, nStep))
         rangeforce.Value2 = forcesstring
 
+        'Export nodal displacement (at each step) to Excel
         Dim deform(nStep - 1) As Object
         Dim deform_string(nodes.length / 4 * 5 - 1, nStep - 1) As String
         Dim xlWorkSheetDeform As Excel.Worksheet = xlWorkBook.Sheets.Add(Count:=1)
@@ -225,6 +220,7 @@ Module Program
         Dim rangedeform As Excel.Range = xlWorkSheetDeform.Range(xlWorkSheetDeform.Cells(1, 1), xlWorkSheetDeform.Cells(nodes.length / 4 * 5, nStep))
         rangedeform.Value2 = deform_string
 
+        'Export stresses to Excel
         Dim VM_MinMax(nStep - 1) As Object
         Dim VM_MinMax_string(4, nStep - 1) As String
         Dim xlWorkSheetVM_MinMax As Excel.Worksheet = xlWorkBook.Sheets.Add(Count:=1)
@@ -241,6 +237,7 @@ Module Program
         xlWorkBook.SaveAs("Z:\StudentFolders\Haider\Projects\Optimization\SolidWorks Interfacing Optimizer\tempfolder\Results.xlsx")
         xlApp.Workbooks.Close()
 
+        'Exit protocol
         xlApp.Quit()
         Runtime.InteropServices.Marshal.ReleaseComObject(xlApp)
         app.CloseAllDocuments(True) 'Closing all documents without save
@@ -286,7 +283,7 @@ Module Program
         Next i
         var_string = temp
     End Function
-    Function LaunchSW() As SldWorks
+    Function LaunchSW() As SldWorks ' lauch SW visibly
         Dim app As SldWorks = CreateObject("SldWorks.application")
         app.Visible = True
         app.CloseAllDocuments(True) 'Closing all documents without save
@@ -363,7 +360,7 @@ Module Program
     End Function
     Function CreateNonLinearStudy(ActDoc As CWModelDoc, errCode As Integer, errorCode As Integer) As CWStudy
         Dim StudyMngr As CWStudyManager = ActDoc.StudyManager()
-        Dim Study As CWStudy = StudyMngr.CreateNewStudy3("Nonlinear", 5, 1, errCode)
+        Dim Study As CWStudy = StudyMngr.CreateNewStudy3("Nonlinear", 5, 1, errCode) ' nonlinear simulation
 
         Dim SolidMgr As CWSolidManager = Study.SolidManager
         If SolidMgr Is Nothing Then ErrorMsg(app, "CWSolidManager object not created", True)
@@ -381,7 +378,7 @@ Module Program
         Dim obj As Object = model.SelectionManager.GetSelectedObject6(1, -1)
         Dim PID As Object = model.Extension.GetPersistReference3(obj)
         Dim SelObj As Object = model.Extension.GetObjectByPersistReference3((PID), errCode)
-        IdentifyEntity = SelObj 'Face Fixed
+        IdentifyEntity = SelObj
     End Function
     Public app As SldWorks
 End Module
